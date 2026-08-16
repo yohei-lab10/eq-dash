@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f172a">
+<title>中国地震リアルタイム</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#e2e8f0;overflow:hidden;touch-action:manipulation}
+#app{display:flex;flex-direction:column;height:100dvh}
+.header{background:#1e293b;border-bottom:1px solid #334155;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.header h1{font-size:14px;font-weight:700}
+.live{display:flex;align-items:center;gap:6px;font-size:11px;color:#22c55e}
+.live::before{content:"";width:8px;height:8px;background:#22c55e;border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}70%{opacity:0.3}}
+.header-stats{display:flex;gap:6px}
+.stat{background:#334155;padding:3px 8px;border-radius:4px;font-size:10px}
+.stat b{color:#fbbf24}
+.main{display:flex;flex-direction:column;flex:1;overflow:hidden}
+@media(min-width:768px){.main{flex-direction:row}}
+.map-wrap{flex:1;position:relative;min-height:50%}
+@media(min-width:768px){.map-wrap{min-height:auto}}
+#map{width:100%;height:100%;background:#0b1120}
+.refresh-btn{position:absolute;top:10px;right:10px;z-index:1000;background:#2563eb;color:white;border:none;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:700}
+.refresh-btn:active{transform:scale(0.95)}
+.mode-badge{position:absolute;top:10px;left:10px;z-index:1000;background:rgba(30,41,59,0.95);padding:4px 10px;border-radius:12px;font-size:10px;border:1px solid #fbbf24;color:#fbbf24}
+.legend{position:absolute;bottom:10px;left:10px;z-index:1000;background:rgba(30,41,59,0.95);padding:8px;border-radius:6px;border:1px solid #334155;font-size:10px}
+.legend-title{font-weight:700;margin-bottom:4px;color:#cbd5e1}
+.legend-row{display:flex;align-items:center;gap:4px;margin-bottom:3px}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+.side{background:#1e293b;border-top:1px solid #334155;display:flex;flex-direction:column;height:45%}
+@media(min-width:768px){.side{width:340px;height:auto;border-top:none;border-left:1px solid #334155}}
+.tabs{display:flex;border-bottom:1px solid #334155;flex-shrink:0}
+.tab{flex:1;padding:10px;text-align:center;font-size:12px;font-weight:700;color:#64748b;background:#1e293b;border:none}
+.tab.active{color:#e2e8f0;background:#334155}
+.alert-list{flex:1;overflow-y:auto;padding:8px}
+.alert-item{padding:10px;border-radius:6px;margin-bottom:6px;font-size:12px;animation:slideIn 0.3s ease-out;cursor:pointer}
+@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.alert-critical{background:rgba(220,38,38,0.15);border-left:3px solid #dc2626}
+.alert-warning{background:rgba(234,88,12,0.15);border-left:3px solid #ea580c}
+.alert-info{background:rgba(37,99,235,0.15);border-left:3px solid #2563eb}
+.alert-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.alert-title{font-weight:700;font-size:13px}
+.alert-badge{font-size:9px;padding:1px 5px;border-radius:3px;margin-left:4px}
+.badge-cn{background:#dc2626;color:white}
+.badge-intl{background:#475569;color:#cbd5e1}
+.alert-meta{color:#94a3b8;font-size:10px;line-height:1.5}
+.alert-time{color:#64748b;font-size:9px;margin-top:3px}
+.empty-state{text-align:center;padding:40px 20px;color:#64748b;font-size:12px}
+.stats-content{flex:1;overflow-y:auto;padding:12px;display:none}
+.stats-content.active{display:block}
+.stat-card{background:#334155;padding:12px;border-radius:8px;margin-bottom:8px}
+.stat-card h3{font-size:11px;color:#94a3b8;margin-bottom:4px}
+.stat-card .value{font-size:20px;font-weight:700;color:#fbbf24}
+.chart-wrap{margin-top:12px;height:140px}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#1e293b}
+::-webkit-scrollbar-thumb{background:#475569;border-radius:2px}
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-120px);background:#1e293b;border:1px solid #334155;padding:10px 20px;border-radius:8px;font-size:12px;z-index:9999;transition:transform 0.3s ease;box-shadow:0 4px 12px rgba(0,0,0,0.5);max-width:90vw;text-align:center}
+.toast.show{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="app">
+<header class="header"><div><h1>🇨🇳 地震リアルタイム</h1><div class="live" id="live">実データ取得中</div></div><div class="header-stats"><div class="stat">本日<b id="st-today">0</b></div><div class="stat">総計<b id="st-total">0</b></div></div></header>
+<div class="main">
+<div class="map-wrap"><div id="map"></div><div class="mode-badge" id="badge">📴 デモモード</div><button class="refresh-btn" id="btn" onclick="fetchData()">🔄 更新</button><div class="legend"><div class="legend-title">震度凡例</div><div class="legend-row"><div class="legend-dot" style="background:#9333ea"></div> M7+</div><div class="legend-row"><div class="legend-dot" style="background:#dc2626"></div> M6+</div><div class="legend-row"><div class="legend-dot" style="background:#f97316"></div> M4.5+</div><div class="legend-row"><div class="legend-dot" style="background:#3b82f6"></div> M2.5+</div></div></div>
+<div class="side"><div class="tabs"><button class="tab active" onclick="switchTab(0)">🚨 警報</button><button class="tab" onclick="switchTab(1)">📊 統計</button></div><div class="alert-list" id="alertList"><div class="empty-state">データを取得中...<br>🔄 更新ボタンをタップ</div></div><div class="stats-content" id="statsPanel"><div class="stat-card"><h3>本日の地震発生数</h3><div class="value" id="stat-today">0</div></div><div class="stat-card"><h3>重大地震（M6.0+）</h3><div class="value" id="stat-critical">0</div></div><div class="stat-card"><h3>中国国内発生</h3><div class="value" id="stat-china">0</div></div><div class="chart-wrap"><canvas id="typeChart"></canvas></div></div></div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const PROXY_URLS=["https://api.allorigins.win/raw?url=","https://corsproxy.io/?","https://api.codetabs.com/v1/proxy?quest="];
+const TARGET_API="https://api.wolfx.jp/cenc_eqlist.json";
+const CHINA_PREFIXES=["CD.","AU.","CC."];
+const DEMO_DATA={"No1":{"type":"reviewed","EventID":"CD.20260816114750.9","time":"2026-08-16 11:20:22","location":"四川眉山市仁寿县","placeName":"四川眉山市仁寿县","magnitude":"3.8","depth":"7","latitude":"29.77","longitude":"104.25","intensity":"4"},"No2":{"type":"reviewed","EventID":"CD.20260816004502.7","time":"2026-08-16 09:15:10","location":"新疆阿克苏地区库车市","placeName":"新疆阿克苏地区库车市","magnitude":"3.2","depth":"19","latitude":"41.21","longitude":"83.84","intensity":"4"},"No3":{"type":"reviewed","EventID":"CC.20260815193757.8","time":"2026-08-15 18:30:15","location":"台湾宜兰县海域","placeName":"台湾宜兰县海域","magnitude":"4.4","depth":"73","latitude":"24.50","longitude":"122.30","intensity":"5"},"No4":{"type":"reviewed","EventID":"CD.20260815010552.890","time":"2026-08-15 01:05:52","location":"新疆阿克苏地区库车市","placeName":"新疆阿克苏地区库车市","magnitude":"3.1","depth":"19","latitude":"41.21","longitude":"83.84","intensity":"4"},"No5":{"type":"reviewed","EventID":"CD.20260814093737.599","time":"2026-08-14 09:33:43","location":"四川内江市隆昌市","placeName":"四川内江市隆昌市","magnitude":"3.6","depth":"6","latitude":"29.22","longitude":"105.23","intensity":"5"},"No6":{"type":"reviewed","EventID":"CD.20260814053842.383","time":"2026-08-14 05:32:47","location":"河北承德市滦平县","placeName":"河北承德市滦平县","magnitude":"2.4","depth":"18","latitude":"40.82","longitude":"117.60","intensity":"4"},"No7":{"type":"reviewed","EventID":"CD.20260813085149.562","time":"2026-08-13 08:47:17","location":"甘肃临夏州永靖县","placeName":"甘肃临夏州永靖县","magnitude":"3.2","depth":"11","latitude":"36.06","longitude":"103.55","intensity":"5"},"No8":{"type":"reviewed","EventID":"CD.20260813080723.600","time":"2026-08-13 08:01:14","location":"内蒙古锡林郭勒盟苏尼特左旗","placeName":"内蒙古锡林郭勒盟苏尼特左旗","magnitude":"3.3","depth":"10","latitude":"42.95","longitude":"114.69","intensity":"5"},"No9":{"type":"reviewed","EventID":"CD.20260813053736.489","time":"2026-08-13 05:28:30","location":"青海海南州兴海县","placeName":"青海海南州兴海县","magnitude":"3.7","depth":"10","latitude":"35.28","longitude":"99.54","intensity":"5"},"No10":{"type":"reviewed","EventID":"CD.20260812205358.629","time":"2026-08-12 20:48:24","location":"四川阿坝州汶川县","placeName":"四川阿坝州汶川县","magnitude":"3.0","depth":"7","latitude":"30.93","longitude":"103.13","intensity":"4"},"No11":{"type":"reviewed","EventID":"CD.20260812134217.356","time":"2026-08-12 13:42:17","location":"新疆巴音郭楞州轮台县","placeName":"新疆巴音郭楞州轮台县","magnitude":"3.8","depth":"17","latitude":"42.20","longitude":"84.10","intensity":"5"},"No12":{"type":"reviewed","EventID":"CD.20260808115656.3","time":"2026-08-08 11:45:27","location":"新疆阿克苏地区沙雅县","placeName":"新疆阿克苏地区沙雅县","magnitude":"4.5","depth":"25","latitude":"39.63","longitude":"82.87","intensity":"5"},"No13":{"type":"reviewed","EventID":"CD.20260807160524.7","time":"2026-08-07 16:02:13","location":"四川宜宾市高县","placeName":"四川宜宾市高县","magnitude":"3.0","depth":"7","latitude":"28.53","longitude":"104.69","intensity":"4"},"No14":{"type":"reviewed","EventID":"CC.20260807131906.1","time":"2026-08-07 13:08:30","location":"四川宜宾市高县","placeName":"四川宜宾市高县","magnitude":"4.9","depth":"6","latitude":"28.51","longitude":"104.67","intensity":"6"},"No15":{"type":"reviewed","EventID":"CD.20260806183947.617","time":"2026-08-06 18:32:33","location":"甘肃张掖市肃南县","placeName":"甘肃张掖市肃南县","magnitude":"3.9","depth":"10","latitude":"38.35","longitude":"99.95","intensity":"6"},"md5":"demo"};
+let map,chart,markers={},seenIds=new Set(),allEvents=[],isLive=false,proxyIdx=0;
+function initMap(){map=L.map("map",{zoomControl:false}).setView([35,105],4);L.control.zoom({position:"bottomright"}).addTo(map);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"",maxZoom:18}).addTo(map)}
+function initChart(){chart=new Chart(document.getElementById("typeChart").getContext("2d"),{type:"doughnut",data:{labels:["M2.5-4.4","M4.5-5.9","M6.0-6.9","M7.0+"],datasets:[{data:[0,0,0,0],backgroundColor:["#3b82f6","#f97316","#dc2626","#9333ea"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"right",labels:{color:"#94a3b8",font:{size:10},boxWidth:10}}}}})}
+async function fetchData(){const b=document.getElementById("btn");b.style.opacity="0.6";let ok=false;for(let i=0;i<PROXY_URLS.length;i++){const idx=(proxyIdx+i)%PROXY_URLS.length;try{const r=await fetch(PROXY_URLS[idx]+encodeURIComponent(TARGET_API),{cache:"no-store"});if(!r.ok)continue;const d=await r.json();if(!d||typeof d!=="object")continue;proxyIdx=idx;isLive=true;proc(d);show("✅ 実データを取得しました");ok=true;break}catch(e){console.log(e)}}if(!ok){isLive=false;proc(DEMO_DATA);show("⚠️ デモデータを表示中")}updBadge();b.style.opacity="1"}
+function proc(raw){const evs=[];for(const[k,v]of Object.entries(raw)){if(k==="md5"||typeof v!=="object")continue;evs.push(v)}let n=0;for(const ev of evs){const id=ev.EventID;if(!id||seenIds.has(id))continue;seenIds.add(id);allEvents.push(ev);addEv(ev);n++}updStats()}
+function addEv(ev){const mag=parseFloat(ev.magnitude)||0,lat=parseFloat(ev.latitude)||0,lon=parseFloat(ev.longitude)||0,isCn=CHINA_PREFIXES.some(p=>ev.EventID?.startsWith(p)),id=ev.EventID;if(markers[id])return;let c;if(mag>=7)c="#9333ea";else if(mag>=6)c="#dc2626";else if(mag>=4.5)c="#f97316";else c="#3b82f6";const r=Math.max(6,mag*3.5);const m=L.circleMarker([lat,lon],{radius:r,fillColor:c,color:"#fff",weight:2,fillOpacity:0.8}).addTo(map);const bd=isCn?'<span style="font-size:10px;padding:2px 6px;background:#dc2626;color:white;border-radius:3px;">国内</span>':'<span style="font-size:10px;padding:2px 6px;background:#475569;color:#cbd5e1;border-radius:3px;">海外</span>';m.bindPopup(`<div style="font-size:12px;color:#1e293b;line-height:1.6;"><div style="font-size:18px;font-weight:700;color:${c};">M${mag}</div><div><b>📍</b> ${ev.location||ev.placeName}</div><div><b>🔽</b> ${ev.depth||"?"}km</div><div><b>📊</b> 震度${ev.intensity||"?"}</div><div><b>🕐</b> ${ev.time}</div><div style="margin-top:4px;">${bd}</div></div>`);m.bindTooltip(`${ev.location} M${mag}`,{direction:"top"});markers[id]=m;setTimeout(()=>{if(markers[id]){map.removeLayer(markers[id]);delete markers[id]}},18e5);addAl(ev,c,isCn)}
+function addAl(ev,c,isCn){const list=document.getElementById("alertList");const mag=parseFloat(ev.magnitude)||0;if(list.querySelector(".empty-state"))list.innerHTML="";const sev=mag>=6?"alert-critical":mag>=4.5?"alert-warning":"alert-info";const bd=isCn?`<span class="alert-badge badge-cn">国内</span>`:`<span class="alert-badge badge-intl">海外</span>`;const div=document.createElement("div");div.className=`alert-item ${sev}`;div.onclick=()=>{map.setView([parseFloat(ev.latitude),parseFloat(ev.longitude)],8);markers[ev.EventID]?.openPopup()};div.innerHTML=`<div class="alert-head"><div class="alert-title">🌍 M${mag} ${bd}</div></div><div class="alert-meta">📍 ${ev.location||ev.placeName}<br>🔽 ${ev.depth||"?"}km | 震度${ev.intensity||"?"}</div><div class="alert-time">🕐 ${ev.time}</div>`;list.insertBefore(div,list.firstChild);while(list.children.length>50)list.removeChild(list.lastChild)}
+function updStats(){const today=new Date().toDateString();let tc=0,cr=0,cn=0,mg=[0,0,0,0];for(const ev of allEvents){const mag=parseFloat(ev.magnitude)||0;const isCn=CHINA_PREFIXES.some(p=>ev.EventID?.startsWith(p));try{const d=new Date(ev.time.replace(/-/g,"/"));if(d.toDateString()===today)tc++}catch(e){}if(mag>=6)cr++;if(isCn)cn++;if(mag>=7)mg[3]++;else if(mag>=6)mg[2]++;else if(mag>=4.5)mg[1]++;else mg[0]++}document.getElementById("st-today").textContent=tc;document.getElementById("st-total").textContent=allEvents.length;document.getElementById("stat-today").textContent=tc;document.getElementById("stat-critical").textContent=cr;document.getElementById("stat-china").textContent=cn;if(chart){chart.data.datasets[0].data=mg;chart.update()}}
+function updBadge(){const b=document.getElementById("badge"),l=document.getElementById("live");if(isLive){b.textContent="🟢 ライブモード";b.style.borderColor=b.style.color="#22c55e";l.textContent="実データ取得中";l.style.color="#22c55e"}else{b.textContent="📴 デモモード";b.style.borderColor=b.style.color="#fbbf24";l.textContent="デモデータ表示中";l.style.color="#ef4444"}}
+function switchTab(i){document.querySelectorAll(".tab").forEach((t,j)=>t.classList.toggle("active",j===i));document.getElementById("alertList").style.display=i===0?"block":"none";document.getElementById("statsPanel").classList.toggle("active",i===1)}
+function show(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3000)}
+initMap();initChart();proc(DEMO_DATA);updBadge();show("📴 デモデータを表示中\n🔄 Wi-Fiで更新ボタンをタップ");setTimeout(fetchData,2000);setInterval(fetchData,3e4);
+</script>
+</body>
+</html>
