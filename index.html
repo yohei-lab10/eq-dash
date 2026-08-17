@@ -1,199 +1,605 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0f172a">
-<title>中国自然災害リアルタイム</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#e2e8f0;overflow:hidden;touch-action:manipulation}
-#app{display:flex;flex-direction:column;height:100dvh}
-.header{background:#1e293b;border-bottom:1px solid #334155;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
-.header h1{font-size:14px;font-weight:700}
-.live{display:flex;align-items:center;gap:6px;font-size:11px;color:#22c55e}
-.live::before{content:"";width:8px;height:8px;background:#22c55e;border-radius:50%;animation:pulse 2s infinite}
-.live.offline{color:#ef4444}
-.live.offline::before{background:#ef4444;animation:none}
-@keyframes pulse{0%,100%{opacity:1}70%{opacity:0.3}}
-.header-stats{display:flex;gap:6px}
-.stat{background:#334155;padding:3px 8px;border-radius:4px;font-size:10px}
-.stat b{color:#fbbf24}
-.main{display:flex;flex-direction:column;flex:1;overflow:hidden}
-@media(min-width:768px){.main{flex-direction:row}}
-.map-wrap{flex:1;position:relative;min-height:50%}
-@media(min-width:768px){.map-wrap{min-height:auto}}
-#map{width:100%;height:100%;background:#0b1120}
-.refresh-btn{position:absolute;top:10px;right:10px;z-index:1000;background:#2563eb;color:white;border:none;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:700}
-.refresh-btn:active{transform:scale(0.95)}
-.filter-panel{position:absolute;top:10px;left:10px;z-index:1000;background:rgba(30,41,59,0.95);padding:8px;border-radius:8px;border:1px solid #334155;backdrop-filter:blur(4px);max-width:200px}
-.filter-panel label{font-size:10px;color:#94a3b8;display:block;margin-bottom:6px}
-.filter-btns{display:flex;gap:4px;flex-wrap:wrap}
-.filter-btns button{padding:4px 8px;border-radius:4px;border:none;color:white;font-size:10px;cursor:pointer;opacity:1;transition:opacity 0.2s}
-.filter-btns button.off{opacity:0.35}
-.btn-eq{background:#dc2626}
-.btn-fl{background:#2563eb}
-.btn-ty{background:#ea580c}
-.btn-ls{background:#ca8a04}
-.btn-dr{background:#b45309}
-.mode-badge{position:absolute;top:50px;left:10px;z-index:1000;background:rgba(30,41,59,0.95);padding:4px 10px;border-radius:12px;font-size:10px;border:1px solid #fbbf24;color:#fbbf24}
-.mode-badge.live{border-color:#22c55e;color:#22c55e}
-.legend{position:absolute;bottom:10px;left:10px;z-index:1000;background:rgba(30,41,59,0.95);padding:8px;border-radius:6px;border:1px solid #334155;font-size:10px}
-.legend-title{font-weight:700;margin-bottom:4px;color:#cbd5e1}
-.legend-row{display:flex;align-items:center;gap:4px;margin-bottom:3px}
-.legend-dot{width:8px;height:8px;border-radius:50%}
-.side{background:#1e293b;border-top:1px solid #334155;display:flex;flex-direction:column;height:45%}
-@media(min-width:768px){.side{width:340px;height:auto;border-top:none;border-left:1px solid #334155}}
-.tabs{display:flex;border-bottom:1px solid #334155;flex-shrink:0}
-.tab{flex:1;padding:10px;text-align:center;font-size:12px;font-weight:700;color:#64748b;background:#1e293b;border:none}
-.tab.active{color:#e2e8f0;background:#334155}
-.alert-list{flex:1;overflow-y:auto;padding:8px}
-.alert-item{padding:10px;border-radius:6px;margin-bottom:6px;font-size:12px;animation:slideIn 0.3s ease-out;cursor:pointer}
-@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.alert-critical{background:rgba(220,38,38,0.15);border-left:3px solid #dc2626}
-.alert-warning{background:rgba(234,88,12,0.15);border-left:3px solid #ea580c}
-.alert-info{background:rgba(37,99,235,0.15);border-left:3px solid #2563eb}
-.alert-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
-.alert-title{font-weight:700;font-size:13px;display:flex;align-items:center;gap:4px}
-.alert-badge{font-size:9px;padding:1px 5px;border-radius:3px;margin-left:4px}
-.badge-cn{background:#dc2626;color:white}
-.badge-intl{background:#475569;color:#cbd5e1}
-.badge-fl-red{background:#dc2626;color:white}
-.badge-fl-org{background:#ea580c;color:white}
-.badge-fl-ylw{background:#eab308;color:#1e293b}
-.badge-fl-blu{background:#3b82f6;color:white}
-.alert-meta{color:#94a3b8;font-size:10px;line-height:1.5}
-.alert-time{color:#64748b;font-size:9px;margin-top:3px}
-.empty-state{text-align:center;padding:40px 20px;color:#64748b;font-size:12px}
-.stats-content{flex:1;overflow-y:auto;padding:12px;display:none}
-.stats-content.active{display:block}
-.stat-card{background:#334155;padding:12px;border-radius:8px;margin-bottom:8px}
-.stat-card h3{font-size:11px;color:#94a3b8;margin-bottom:4px}
-.stat-card .value{font-size:20px;font-weight:700;color:#fbbf24}
-.chart-wrap{margin-top:12px;height:140px}
-::-webkit-scrollbar{width:4px}
-::-webkit-scrollbar-track{background:#1e293b}
-::-webkit-scrollbar-thumb{background:#475569;border-radius:2px}
-.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-120px);background:#1e293b;border:1px solid #334155;padding:10px 20px;border-radius:8px;font-size:12px;z-index:9999;transition:transform 0.3s ease;box-shadow:0 4px 12px rgba(0,0,0,0.5);max-width:90vw;text-align:center}
-.toast.show{transform:translateX(-50%) translateY(0)}
-</style>
-</head>
-<body>
-<div id="app">
-<header class="header"><div><h1>🇨🇳 自然災害リアルタイム</h1><div class="live" id="live">実データ取得中</div></div><div class="header-stats"><div class="stat">本日<b id="st-today">0</b></div><div class="stat">総計<b id="st-total">0</b></div></div></header>
-<div class="main">
-<div class="map-wrap">
-<div id="map"></div>
-<div class="filter-panel"><label>災害フィルター</label><div class="filter-btns"><button class="btn-eq" id="f-eq" onclick="toggleF('earthquake')">地震</button><button class="btn-fl" id="f-fl" onclick="toggleF('flood')">洪水</button><button class="btn-ty" id="f-ty" onclick="toggleF('typhoon')">台風</button><button class="btn-ls" id="f-ls" onclick="toggleF('landslide')">地滑り</button><button class="btn-dr" id="f-dr" onclick="toggleF('drought')">干ばつ</button></div></div>
-<div class="mode-badge" id="badge">📴 デモモード</div>
-<button class="refresh-btn" id="btn" onclick="fetchAll()">🔄 更新</button>
-<div class="legend"><div class="legend-title">凡例</div><div class="legend-row"><div class="legend-dot" style="background:#dc2626"></div> 地震M6+</div><div class="legend-row"><div class="legend-dot" style="background:#2563eb"></div> 洪水赤警報</div><div class="legend-row"><div class="legend-dot" style="background:#ea580c"></div> 台風</div><div class="legend-row"><div class="legend-dot" style="background:#ca8a04"></div> 地滑り</div></div>
-</div>
-<div class="side">
-<div class="tabs"><button class="tab active" onclick="switchTab(0)">🚨 警報</button><button class="tab" onclick="switchTab(1)">📊 統計</button></div>
-<div class="alert-list" id="alertList"><div class="empty-state">データを取得中...<br>🔄 更新ボタンをタップ</div></div>
-<div class="stats-content" id="statsPanel">
-<div class="stat-card"><h3>本日の災害発生数</h3><div class="value" id="stat-today">0</div></div>
-<div class="stat-card"><h3>重大警報</h3><div class="value" id="stat-critical">0</div></div>
-<div class="stat-card"><h3>中国国内</h3><div class="value" id="stat-china">0</div></div>
-<div class="chart-wrap"><canvas id="typeChart"></canvas></div>
-</div>
-</div>
-</div>
-</div>
-<div class="toast" id="toast"></div>
-<script>
-const PROXY_URLS=["https://api.allorigins.win/raw?url=","https://corsproxy.io/?","https://api.codetabs.com/v1/proxy?quest="];
-const EQ_API="https://api.wolfx.jp/cenc_eqlist.json";
-const WX_API="https://api.wolfx.jp/weather_rank.json";
-const CHINA_PREFIXES=["CD.","AU.","CC."];
-let map,chart,markers={},seenIds=new Set(),allEvents=[],isLive=false,proxyIdx=0;
-let activeFilters=new Set(["earthquake","flood","typhoon"]);
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { RefreshCw, ChevronLeft, ExternalLink, AlertCircle } from "lucide-react";
 
-const DEMO_EQ={"No1":{"type":"reviewed","EventID":"CD.20260816114750.9","time":"2026-08-16 11:20:22","location":"四川眉山市仁寿县","placeName":"四川眉山市仁寿县","magnitude":"3.8","depth":"7","latitude":"29.77","longitude":"104.25","intensity":"4"},"No2":{"type":"reviewed","EventID":"CD.20260816004502.7","time":"2026-08-16 09:15:10","location":"新疆阿克苏地区库车市","placeName":"新疆阿克苏地区库车市","magnitude":"3.2","depth":"19","latitude":"41.21","longitude":"83.84","intensity":"4"},"No3":{"type":"reviewed","EventID":"CC.20260815193757.8","time":"2026-08-15 18:30:15","location":"台湾宜兰县海域","placeName":"台湾宜兰县海域","magnitude":"4.4","depth":"73","latitude":"24.50","longitude":"122.30","intensity":"5"},"No4":{"type":"reviewed","EventID":"CD.20260815010552.890","time":"2026-08-15 01:05:52","location":"新疆阿克苏地区库车市","placeName":"新疆阿克苏地区库车市","magnitude":"3.1","depth":"19","latitude":"41.21","longitude":"83.84","intensity":"4"},"No5":{"type":"reviewed","EventID":"CD.20260814093737.599","time":"2026-08-14 09:33:43","location":"四川内江市隆昌市","placeName":"四川内江市隆昌市","magnitude":"3.6","depth":"6","latitude":"29.22","longitude":"105.23","intensity":"5"},"No6":{"type":"reviewed","EventID":"CD.20260814053842.383","time":"2026-08-14 05:32:47","location":"河北承德市滦平县","placeName":"河北承德市滦平县","magnitude":"2.4","depth":"18","latitude":"40.82","longitude":"117.60","intensity":"4"},"No7":{"type":"reviewed","EventID":"CD.20260813085149.562","time":"2026-08-13 08:47:17","location":"甘肃临夏州永靖县","placeName":"甘肃临夏州永靖县","magnitude":"3.2","depth":"11","latitude":"36.06","longitude":"103.55","intensity":"5"},"No8":{"type":"reviewed","EventID":"CD.20260813080723.600","time":"2026-08-13 08:01:14","location":"内蒙古锡林郭勒盟苏尼特左旗","placeName":"内蒙古锡林郭勒盟苏尼特左旗","magnitude":"3.3","depth":"10","latitude":"42.95","longitude":"114.69","intensity":"5"},"No9":{"type":"reviewed","EventID":"CD.20260813053736.489","time":"2026-08-13 05:28:30","location":"青海海南州兴海县","placeName":"青海海南州兴海县","magnitude":"3.7","depth":"10","latitude":"35.28","longitude":"99.54","intensity":"5"},"No10":{"type":"reviewed","EventID":"CD.20260812205358.629","time":"2026-08-12 20:48:24","location":"四川阿坝州汶川县","placeName":"四川阿坝州汶川县","magnitude":"3.0","depth":"7","latitude":"30.93","longitude":"103.13","intensity":"4"},"No11":{"type":"reviewed","EventID":"CD.20260812134217.356","time":"2026-08-12 13:42:17","location":"新疆巴音郭楞州轮台县","placeName":"新疆巴音郭楞州轮台县","magnitude":"3.8","depth":"17","latitude":"42.20","longitude":"84.10","intensity":"5"},"No12":{"type":"reviewed","EventID":"CD.20260808115656.3","time":"2026-08-08 11:45:27","location":"新疆阿克苏地区沙雅县","placeName":"新疆阿克苏地区沙雅县","magnitude":"4.5","depth":"25","latitude":"39.63","longitude":"82.87","intensity":"5"},"No13":{"type":"reviewed","EventID":"CD.20260807160524.7","time":"2026-08-07 16:02:13","location":"四川宜宾市高县","placeName":"四川宜宾市高县","magnitude":"3.0","depth":"7","latitude":"28.53","longitude":"104.69","intensity":"4"},"No14":{"type":"reviewed","EventID":"CC.20260807131906.1","time":"2026-08-07 13:08:30","location":"四川宜宾市高县","placeName":"四川宜宾市高县","magnitude":"4.9","depth":"6","latitude":"28.51","longitude":"104.67","intensity":"6"},"No15":{"type":"reviewed","EventID":"CD.20260806183947.617","time":"2026-08-06 18:32:33","location":"甘肃张掖市肃南县","placeName":"甘肃张掖市肃南县","magnitude":"3.9","depth":"10","latitude":"38.35","longitude":"99.95","intensity":"6"},"md5":"demo"};
+// ---------------------------------------------------------------------------
+// Design tokens
+// ---------------------------------------------------------------------------
+const COLORS = {
+  ink: "#14181F",
+  inkSoft: "#1D232D",
+  inkLine: "#2B3340",
+  paper: "#F7F4EC",
+  paperDim: "#ECE7D9",
+  cinnabar: "#B23A2E",
+  cinnabarDim: "#7A281F",
+  jade: "#3F6659",
+  gold: "#B8935A",
+  steel: "#3B5B7A",
+  textMuted: "#8A93A3",
+  textFaint: "#5B6472",
+};
 
-const DEMO_FLOOD=[
-{id:"FL001",type:"flood",time:"2026-08-16 14:30:00",location:"広東省珠江デルタ",latitude:23.05,longitude:113.45,level:"红色",affectedArea:1250,severity:"critical",desc:"広州・深セン周辺で大規模洪水警報"},
-{id:"FL002",type:"flood",time:"2026-08-16 12:15:00",location:"河南省鄭州市",latitude:34.75,longitude:113.65,level:"橙色",affectedArea:580,severity:"warning",desc:"黄河支流で水位が警戒水位を超過"},
-{id:"FL003",type:"flood",time:"2026-08-16 10:00:00",location:"湖北省武漢市",latitude:30.58,longitude:114.30,level:"黄色",affectedArea:320,severity:"warning",desc:"長江中流で水位上昇継続中"},
-{id:"FL004",type:"flood",time:"2026-08-15 22:45:00",location:"浙江省杭州市",latitude:30.25,longitude:120.15,level:"蓝色",affectedArea:95,severity:"info",desc:"銭塘江流域で注意喚起"},
-{id:"FL005",type:"flood",time:"2026-08-15 18:20:00",location:"四川省成都市",latitude:30.66,longitude:104.06,level:"橙色",affectedArea:720,severity:"warning",desc:"岷江・沱江合流点で氾濫危険"},
-{id:"FL006",type:"flood",time:"2026-08-15 06:00:00",location:"山東省済南市",latitude:36.65,longitude:117.00,level:"黄色",affectedArea:210,severity:"warning",desc:"黄河下流で水位監視強化"},
-{id:"FL007",type:"flood",time:"2026-08-14 15:30:00",location:"湖南省長沙市",latitude:28.22,longitude:112.98,level:"红色",affectedArea:1800,severity:"critical",desc:"湘江流域で決壊の恐れ"},
-{id:"FL008",type:"flood",time:"2026-08-14 09:00:00",location:"江西省南昌市",latitude:28.68,longitude:115.87,level:"蓝色",affectedArea:45,severity:"info",desc:"鄱陽湖周辺で水位上昇"}
+const CATEGORIES = [
+  { key: "economy", label: "経済・金融", short: "経", color: COLORS.gold, count: 3 },
+  { key: "insurance", label: "保険・規制", short: "保", color: COLORS.cinnabar, count: 3 },
+  { key: "politics", label: "政治・社会", short: "政", color: COLORS.jade, count: 2 },
+  { key: "tech", label: "IT・技術", short: "技", color: COLORS.steel, count: 2 },
 ];
 
-const DEMO_TYPHOON=[
-{id:"TY001",type:"typhoon",time:"2026-08-16 15:00:00",name:"台風202612号",location:"台湾海峡",latitude:23.50,longitude:119.50,windSpeed:145,pressure:945,severity:"critical",desc:"中国南部へ上陸の恐れ"},
-{id:"TY002",type:"typhoon",time:"2026-08-16 09:00:00",name:"台風202612号",location:"フィリピン海",latitude:20.00,longitude:128.00,windSpeed:120,pressure:965,severity:"warning",desc:"西北西へ進行中"},
-{id:"TY003",type:"typhoon",time:"2026-08-15 21:00:00",name:"台風202611号",location:"広東省沿岸",latitude:21.80,longitude:113.20,windSpeed:95,pressure:980,severity:"warning",desc:"香港・澳門に接近中"},
-{id:"TY004",type:"typhoon",time:"2026-08-15 12:00:00",name:"台風202611号",location:"南シナ海",latitude:18.50,longitude:116.00,windSpeed:110,pressure:970,severity:"warning",desc:"海南省へ向かう"},
-{id:"TY005",type:"typhoon",time:"2026-08-14 18:00:00",name:"台風202610号",location:"浙江省舟山市",latitude:30.00,longitude:122.20,windSpeed:85,pressure:985,severity:"info",desc:"東シナ海を北東へ進行"}
+const REGIONS = [
+  { key: "national", label: "中国全土" },
+  { key: "east_china", label: "華東地区" },
 ];
 
-const DEMO_LS=[
-{id:"LS001",type:"landslide",time:"2026-08-16 11:00:00",location:"雲南省昆明市",latitude:25.03,longitude:102.71,severity:"warning",desc:"山崩れで道路が不通"},
-{id:"LS002",type:"landslide",time:"2026-08-15 16:30:00",location:"貴州省貴陽市",latitude:26.65,longitude:106.63,severity:"info",desc:"斜面崩壊の危険性増大"},
-{id:"LS003",type:"landslide",time:"2026-08-14 08:00:00",location:"陝西省西安市",latitude:34.34,longitude:108.94,severity:"warning",desc:"土砂崩れで住民避難"}
-];
+const FONT_LINK_ID = "cn-newswire-fonts";
 
-const DEMO_DR=[
-{id:"DR001",type:"drought",time:"2026-08-16 00:00:00",location:"内モンゴル",latitude:42.00,longitude:115.00,severity:"info",desc:"50日以上降雨なし"},
-{id:"DR002",type:"drought",time:"2026-08-15 00:00:00",location:"新疆ウイグル",latitude:42.00,longitude:86.00,severity:"warning",desc:"農業用水が不足"}
-];
+function useFonts() {
+  useEffect(() => {
+    if (document.getElementById(FONT_LINK_ID)) return;
+    const link = document.createElement("link");
+    link.id = FONT_LINK_ID;
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap";
+    document.head.appendChild(link);
+  }, []);
+}
 
-function initMap(){map=L.map("map",{zoomControl:false}).setView([35,105],4);L.control.zoom({position:"bottomright"}).addTo(map);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"",maxZoom:18}).addTo(map)}
-function initChart(){chart=new Chart(document.getElementById("typeChart").getContext("2d"),{type:"doughnut",data:{labels:["地震","洪水","台風","地滑り","干ばつ"],datasets:[{data:[0,0,0,0,0],backgroundColor:["#dc2626","#2563eb","#ea580c","#ca8a04","#b45309"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"right",labels:{color:"#94a3b8",font:{size:10},boxWidth:10}}}}})}
+// ---------------------------------------------------------------------------
+// Data fetching
+// ---------------------------------------------------------------------------
+function extractJsonArray(text) {
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) throw new Error("JSON not found");
+  return JSON.parse(text.slice(start, end + 1));
+}
 
-function toggleF(t){const b=document.getElementById("f-"+t.substring(0,2));if(activeFilters.has(t)){activeFilters.delete(t);b.classList.add("off")}else{activeFilters.add(t);b.classList.remove("off")}updateVis()}
-function updateVis(){Object.values(markers).forEach(m=>{if(activeFilters.has(m.dType)){if(!map.hasLayer(m.layer))map.addLayer(m.layer)}else{if(map.hasLayer(m.layer))map.removeLayer(m.layer)}})}
+async function fetchCategory(cat) {
+  const prompt = `中国に関する直近48時間以内の「${cat.label}」分野の主要ニュースを、世界各国の報道機関を横断的にweb検索して調べてください。中国国内メディア(新華社、人民日報、財新、澎湃新聞、第一財経など)と、ロイター、ブルームバーグ、NHK、日本経済新聞、CNBC等の海外メディアの両方を必ず対象に含め、中国メディアの報道が偏りなく含まれるようにしてください。
 
-async function fetchAll(){const b=document.getElementById("btn");b.style.opacity="0.6";await fetchEQ();b.style.opacity="1"}
-async function fetchEQ(){for(let i=0;i<PROXY_URLS.length;i++){const idx=(proxyIdx+i)%PROXY_URLS.length;try{const r=await fetch(PROXY_URLS[idx]+encodeURIComponent(EQ_API),{cache:"no-store"});if(!r.ok)continue;const d=await r.json();if(!d||typeof d!=="object")continue;proxyIdx=idx;isLive=true;procEQ(d);showT("✅ 地震実データ取得");return}catch(e){}}isLive=false;showT("⚠️ デモデータ表示中")}
-function procEQ(raw){const evs=[];for(const[k,v]of Object.entries(raw)){if(k==="md5"||typeof v!=="object")continue;evs.push(v)}for(const ev of evs){const id=ev.EventID;if(!id||seenIds.has(id))continue;seenIds.add(id);allEvents.push({...ev,_type:"earthquake"});addMarker({...ev,_type:"earthquake"})}updStats()}
+${cat.count}件選び、そのうち半分程度は中国全土に関わるニュース(region:"national")、残り半分程度は華東地区(上海市・江蘇省・浙江省・安徽省)に特有・関連するニュース(region:"east_china")にしてください。該当がない場合はnationalに寄せて構いません。
 
-function addMarker(ev){const t=ev._type||ev.type;const id=ev.EventID||ev.id;const lat=parseFloat(ev.latitude)||0;const lon=parseFloat(ev.longitude)||0;if(!lat||!lon)return;if(markers[id])return;
-let color,radius,popup,icon;
-if(t==="earthquake"){const mag=parseFloat(ev.magnitude)||0;if(mag>=7)color="#9333ea";else if(mag>=6)color="#dc2626";else if(mag>=4.5)color="#f97316";else color="#3b82f6";radius=Math.max(6,mag*3.5);const isCn=CHINA_PREFIXES.some(p=>ev.EventID?.startsWith(p));const bd=isCn?'<span style="font-size:10px;padding:2px 6px;background:#dc2626;color:white;border-radius:3px;">国内</span>':'<span style="font-size:10px;padding:2px 6px;background:#475569;color:#cbd5e1;border-radius:3px;">海外</span>';popup=`<div style="font-size:12px;color:#1e293b;line-height:1.6;"><div style="font-size:18px;font-weight:700;color:${color};">M${mag}</div><div><b>📍</b> ${ev.location||ev.placeName}</div><div><b>🔽</b> ${ev.depth||"?"}km</div><div><b>📊</b> 震度${ev.intensity||"?"}</div><div><b>🕐</b> ${ev.time}</div><div style="margin-top:4px;">${bd}</div></div>`;icon="🌍"}
-else if(t==="flood"){const lv=ev.level||"蓝色";const colors={"红色":"#dc2626","橙色":"#f97316","黄色":"#eab308","蓝色":"#3b82f6"};color=colors[lv]||"#3b82f6";radius=12;const bd=lv==="红色"?'<span style="font-size:10px;padding:2px 6px;background:#dc2626;color:white;border-radius:3px;">赤警報</span>':lv==="橙色"?'<span style="font-size:10px;padding:2px 6px;background:#f97316;color:white;border-radius:3px;">橙警報</span>':lv==="黄色"?'<span style="font-size:10px;padding:2px 6px;background:#eab308;color:#1e293b;border-radius:3px;">黄警報</span>':'<span style="font-size:10px;padding:2px 6px;background:#3b82f6;color:white;border-radius:3px;">蓝注意</span>';popup=`<div style="font-size:12px;color:#1e293b;line-height:1.6;"><div style="font-size:16px;font-weight:700;color:${color};">🌊 洪水警報</div><div><b>📍</b> ${ev.location}</div><div><b>⚠️</b> ${ev.level}レベル</div><div><b>🏞️</b> 影響面積 ${ev.affectedArea}km²</div><div><b>🕐</b> ${ev.time}</div><div style="margin-top:4px;">${bd}</div></div>`;icon="🌊"}
-else if(t==="typhoon"){color="#ea580c";radius=16;popup=`<div style="font-size:12px;color:#1e293b;line-height:1.6;"><div style="font-size:16px;font-weight:700;color:#ea580c;">🌀 ${ev.name}</div><div><b>📍</b> ${ev.location}</div><div><b>💨</b> 最大風速 ${ev.windSpeed}km/h</div><div><b>🌀</b> 中心気圧 ${ev.pressure}hPa</div><div><b>🕐</b> ${ev.time}</div></div>`;icon="🌀"}
-else if(t==="landslide"){color="#ca8a04";radius=10;popup=`<div style="font-size:12px;color:#1e293b;line-height:1.6;"><div style="font-size:16px;font-weight:700;color:#ca8a04;">⛰️ 地滑り</div><div><b>📍</b> ${ev.location}</div><div><b>🕐</b> ${ev.time}</div></div>`;icon="⛰️"}
-else{color="#b45309";radius=8;popup=`<div style="font-size:12px;color:#1e293b;line-height:1.6;"><div style="font-size:16px;font-weight:700;color:#b45309;">🌵 干ばつ</div><div><b>📍</b> ${ev.location}</div><div><b>🕐</b> ${ev.time}</div></div>`;icon="🌵"}
+出力は次のJSON配列のみを返してください。説明文・前置き・Markdownのコードフェンスは一切不要です。
 
-const m=L.circleMarker([lat,lon],{radius:radius,fillColor:color,color:"#fff",weight:2,fillOpacity:0.8}).addTo(map);
-m.bindPopup(popup);m.bindTooltip(`${icon} ${ev.location}`,{direction:"top"});
-if(!activeFilters.has(t))map.removeLayer(m);
-markers[id]={layer:m,dType:t,id:id};
-setTimeout(()=>{if(markers[id]){map.removeLayer(markers[id].layer);delete markers[id]}},36e5);
-addAlert(ev,t,color)}
+[{"id":"一意の英数字ID","region":"national または east_china","title_ja":"日本語見出し(30字程度)","summary_ja":"日本語要約(1文、60字程度)","body_ja":"日本語本文。自分の言葉で200〜300字程度に再構成すること。原文の引用は禁止。","source_name":"報道機関名","source_url":"記事の実際のURL","published_at":"日付(例:2026-08-16)"}]
 
-function addAlert(ev,t,color){const list=document.getElementById("alertList");if(list.querySelector(".empty-state"))list.innerHTML="";let sev,title,meta,badge;
-if(t==="earthquake"){const mag=parseFloat(ev.magnitude)||0;sev=mag>=6?"alert-critical":mag>=4.5?"alert-warning":"alert-info";title=`🌍 M${mag}`;meta=`📍 ${ev.location||ev.placeName}<br>🔽 ${ev.depth||"?"}km | 震度${ev.intensity||"?"}`;const isCn=CHINA_PREFIXES.some(p=>ev.EventID?.startsWith(p));badge=isCn?`<span class="alert-badge badge-cn">国内</span>`:`<span class="alert-badge badge-intl">海外</span>`}
-else if(t==="flood"){sev=ev.severity==="critical"?"alert-critical":ev.severity==="warning"?"alert-warning":"alert-info";title=`🌊 洪水 (${ev.level})`;meta=`📍 ${ev.location}<br>🏞️ 影響面積 ${ev.affectedArea}km²`;badge=ev.level==="红色"?`<span class="alert-badge badge-fl-red">赤警報</span>`:ev.level==="橙色"?`<span class="alert-badge badge-fl-org">橙警報</span>`:ev.level==="黄色"?`<span class="alert-badge badge-fl-ylw">黄警報</span>`:`<span class="alert-badge badge-fl-blu">蓝注意</span>`}
-else if(t==="typhoon"){sev=ev.severity==="critical"?"alert-critical":"alert-warning";title=`🌀 ${ev.name}`;meta=`📍 ${ev.location}<br>💨 ${ev.windSpeed}km/h | 🌀 ${ev.pressure}hPa`;badge=""}
-else if(t==="landslide"){sev=ev.severity==="critical"?"alert-critical":"alert-info";title=`⛰️ 地滑り`;meta=`📍 ${ev.location}`;badge=""}
-else{sev="alert-info";title=`🌵 干ばつ`;meta=`📍 ${ev.location}`;badge=""}
-const div=document.createElement("div");div.className=`alert-item ${sev}`;div.onclick=()=>{map.setView([parseFloat(ev.latitude),parseFloat(ev.longitude)],8);markers[ev.EventID||ev.id]?.layer.openPopup()};
-div.innerHTML=`<div class="alert-head"><div class="alert-title">${title} ${badge}</div></div><div class="alert-meta">${meta}</div><div class="alert-time">🕐 ${ev.time}</div>`;
-list.insertBefore(div,list.firstChild);while(list.children.length>80)list.removeChild(list.lastChild)}
+必ず実在する報道に基づき、内容を捏造しないこと。原文が中国語・英語であっても自然な日本語に翻訳・要約すること。`;
 
-function updStats(){const today=new Date().toDateString();let tc=0,cr=0,cn=0,tcnt={earthquake:0,flood:0,typhoon:0,landslide:0,drought:0};for(const ev of allEvents){const t=ev._type||ev.type;tcnt[t]=(tcnt[t]||0)+1;if(t==="earthquake"){try{const d=new Date(ev.time.replace(/-/g,"/"));if(d.toDateString()===today)tc++}catch(e){}if(parseFloat(ev.magnitude)>=6)cr++;if(CHINA_PREFIXES.some(p=>ev.EventID?.startsWith(p)))cn++}else{if(t!=="drought")tc++}}document.getElementById("st-today").textContent=tc;document.getElementById("st-total").textContent=allEvents.length;document.getElementById("stat-today").textContent=tc;document.getElementById("stat-critical").textContent=cr;document.getElementById("stat-china").textContent=cn;if(chart){chart.data.datasets[0].data=[tcnt.earthquake,tcnt.flood,tcnt.typhoon,tcnt.landslide,tcnt.drought];chart.update()}}
-function updBadge(){const b=document.getElementById("badge"),l=document.getElementById("live");if(isLive){b.className="mode-badge live";b.textContent="🟢 ライブモード";l.className="live";l.textContent="実データ取得中"}else{b.className="mode-badge";b.textContent="📴 デモモード";l.className="live offline";l.textContent="デモデータ表示中"}}
-function switchTab(i){document.querySelectorAll(".tab").forEach((t,j)=>t.classList.toggle("active",j===i));document.getElementById("alertList").style.display=i===0?"block":"none";document.getElementById("statsPanel").classList.toggle("active",i===1)}
-function showT(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3000)}
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      system:
+        "あなたは世界各国の報道機関を横断的に調べ、中国に関するニュースを日本語で要約・翻訳する編集者です。指示されたJSON形式以外は一切出力しないでください。",
+      messages: [{ role: "user", content: prompt }],
+      tools: [{ type: "web_search_20250305", name: "web_search" }],
+    }),
+  });
 
-initMap();initChart();
-for(const[k,v]of Object.entries(DEMO_EQ)){if(k==="md5")continue;addMarker({...v,_type:"earthquake"})}
-DEMO_FLOOD.forEach(e=>addMarker({...e,_type:"flood"}));
-DEMO_TYPHOON.forEach(e=>addMarker({...e,_type:"typhoon"}));
-DEMO_LS.forEach(e=>addMarker({...e,_type:"landslide"}));
-DEMO_DR.forEach(e=>addMarker({...e,_type:"drought"}));
-updStats();updBadge();showT("📴 デモデータ表示中\n🔄 Wi-Fiで更新ボタンをタップ");
-setTimeout(fetchAll,2000);setInterval(fetchAll,6e4);
-</script>
-</body>
-</html>
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const data = await response.json();
+  const text = (data.content || [])
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+  const items = extractJsonArray(text);
+  return items.map((it, i) => ({
+    ...it,
+    id: it.id || `${cat.key}-${i}`,
+    category: cat.key,
+    region: it.region === "east_china" ? "east_china" : "national",
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// UI pieces
+// ---------------------------------------------------------------------------
+function Seal({ cat, size = 26 }) {
+  const meta = CATEGORIES.find((c) => c.key === cat) || CATEGORIES[0];
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: meta.color,
+        color: COLORS.paper,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "'Noto Serif JP', serif",
+        fontWeight: 700,
+        fontSize: size * 0.46,
+        flexShrink: 0,
+        boxShadow: "0 1px 0 rgba(0,0,0,0.25)",
+      }}
+    >
+      {meta.short}
+    </div>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="px-2 py-3" style={{ borderBottom: `1px solid ${COLORS.inkLine}` }}>
+      <div className="flex gap-2 items-center">
+        <div
+          className="animate-pulse"
+          style={{ width: 22, height: 22, borderRadius: "50%", background: COLORS.inkLine, flexShrink: 0 }}
+        />
+        <div className="flex-1 space-y-2">
+          <div className="animate-pulse" style={{ height: 11, width: "80%", background: COLORS.inkLine, borderRadius: 3 }} />
+          <div className="animate-pulse" style={{ height: 9, width: "60%", background: COLORS.inkLine, borderRadius: 3 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArticleCard({ article, onOpen }) {
+  const meta = CATEGORIES.find((c) => c.key === article.category) || CATEGORIES[0];
+  return (
+    <button
+      onClick={() => onOpen(article)}
+      className="w-full text-left px-2 py-3"
+      style={{
+        borderLeft: `2.5px solid ${meta.color}`,
+        borderBottom: `1px solid ${COLORS.inkLine}`,
+        background: "transparent",
+      }}
+    >
+      <div className="flex items-center gap-1.5">
+        <Seal cat={article.category} size={20} />
+        <div
+          style={{
+            fontFamily: "'Noto Serif JP', serif",
+            fontWeight: 700,
+            fontSize: 12.5,
+            color: COLORS.paper,
+            lineHeight: 1.4,
+          }}
+        >
+          {article.title_ja}
+        </div>
+      </div>
+      <div
+        style={{
+          fontFamily: "'Noto Sans JP', sans-serif",
+          fontSize: 11,
+          color: COLORS.textMuted,
+          marginTop: 5,
+          lineHeight: 1.5,
+        }}
+      >
+        {article.summary_ja}
+      </div>
+      {/* footer: source */}
+      <div
+        className="flex items-center justify-between"
+        style={{
+          marginTop: 8,
+          paddingTop: 6,
+          borderTop: `1px dashed ${COLORS.inkLine}`,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9.5,
+            letterSpacing: 0.3,
+            color: COLORS.textFaint,
+          }}
+        >
+          出典: {article.source_name}
+        </span>
+        <span
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9.5,
+            color: COLORS.textFaint,
+          }}
+        >
+          {article.published_at}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function DetailView({ article, onBack }) {
+  const meta = CATEGORIES.find((c) => c.key === article.category) || CATEGORIES[0];
+  const region = REGIONS.find((r) => r.key === article.region) || REGIONS[0];
+  return (
+    <div className="absolute inset-0 flex flex-col" style={{ background: COLORS.ink, zIndex: 20 }}>
+      <div
+        className="flex items-center gap-2 px-4"
+        style={{ height: 52, borderBottom: `1px solid ${COLORS.inkLine}`, flexShrink: 0 }}
+      >
+        <button onClick={onBack} className="flex items-center gap-1" style={{ color: COLORS.paper }}>
+          <ChevronLeft size={20} />
+          <span style={{ fontFamily: "'Noto Sans JP', sans-serif", fontSize: 13 }}>戻る</span>
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 py-6">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Seal cat={article.category} size={22} />
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10.5,
+              letterSpacing: 0.6,
+              color: meta.color,
+              textTransform: "uppercase",
+            }}
+          >
+            {meta.label}
+          </span>
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10.5,
+              color: COLORS.textFaint,
+              border: `1px solid ${COLORS.inkLine}`,
+              borderRadius: 999,
+              padding: "2px 8px",
+            }}
+          >
+            {region.label}
+          </span>
+        </div>
+        <h1
+          style={{
+            fontFamily: "'Noto Serif JP', serif",
+            fontWeight: 900,
+            fontSize: 21,
+            color: COLORS.paper,
+            lineHeight: 1.5,
+            marginTop: 14,
+          }}
+        >
+          {article.title_ja}
+        </h1>
+        <div style={{ height: 1, background: COLORS.inkLine, margin: "18px 0" }} />
+        <p
+          style={{
+            fontFamily: "'Noto Sans JP', sans-serif",
+            fontSize: 14.5,
+            color: COLORS.paperDim,
+            lineHeight: 2,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {article.body_ja}
+        </p>
+
+        {/* footer: source */}
+        <div
+          style={{
+            marginTop: 24,
+            paddingTop: 14,
+            borderTop: `1px dashed ${COLORS.inkLine}`,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10.5,
+              color: COLORS.textFaint,
+              letterSpacing: 0.3,
+              marginBottom: 10,
+            }}
+          >
+            出典: {article.source_name} ・ {article.published_at}
+          </div>
+          {article.source_url && (
+            <a
+              href={article.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5"
+              style={{
+                fontFamily: "'Noto Sans JP', sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                color: COLORS.paper,
+                background: meta.color,
+                padding: "10px 16px",
+                borderRadius: 4,
+              }}
+            >
+              元記事を見る <ExternalLink size={13} />
+            </a>
+          )}
+          <p
+            style={{
+              fontFamily: "'Noto Sans JP', sans-serif",
+              fontSize: 10.5,
+              color: COLORS.textFaint,
+              marginTop: 14,
+              lineHeight: 1.6,
+            }}
+          >
+            ※本文はAIによる要約・翻訳です。正確な内容は元記事をご確認ください。
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main app
+// ---------------------------------------------------------------------------
+export default function ChinaNewswire() {
+  useFonts();
+  const [articles, setArticles] = useState([]);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [errorCats, setErrorCats] = useState([]);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [selected, setSelected] = useState(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const mounted = useRef(true);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setErrorCats([]);
+    const results = await Promise.allSettled(CATEGORIES.map((c) => fetchCategory(c)));
+    const combined = [];
+    const failed = [];
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") combined.push(...r.value);
+      else failed.push(CATEGORIES[i].label);
+    });
+    if (!mounted.current) return;
+    setArticles(combined);
+    setErrorCats(failed);
+    const stamp = new Date().toISOString();
+    setUpdatedAt(stamp);
+    setLoading(false);
+    try {
+      await window.storage.set(
+        "news-cache",
+        JSON.stringify({ articles: combined, updatedAt: stamp }),
+        false
+      );
+    } catch (e) {
+      // storage failure is non-fatal
+    }
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    (async () => {
+      let hadCache = false;
+      try {
+        const cached = await window.storage.get("news-cache", false);
+        if (cached && mounted.current) {
+          const parsed = JSON.parse(cached.value);
+          if (parsed.articles && parsed.articles.length > 0) {
+            setArticles(parsed.articles);
+            setUpdatedAt(parsed.updatedAt || null);
+            hadCache = true;
+          }
+        }
+      } catch (e) {
+        // no cache yet
+      } finally {
+        if (mounted.current) setInitialLoadDone(true);
+      }
+      // First time opening with nothing cached: fetch automatically.
+      if (!hadCache && mounted.current) {
+        refresh();
+      }
+    })();
+    return () => {
+      mounted.current = false;
+    };
+  }, [refresh]);
+
+  const filtered =
+    activeFilter === "all" ? articles : articles.filter((a) => a.category === activeFilter);
+
+  const formattedTime = updatedAt
+    ? new Date(updatedAt).toLocaleString("ja-JP", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
+  return (
+    <div
+      className="relative mx-auto flex flex-col overflow-hidden"
+      style={{
+        width: "100%",
+        maxWidth: 430,
+        height: "100vh",
+        maxHeight: 860,
+        background: COLORS.ink,
+        fontFamily: "'Noto Sans JP', sans-serif",
+      }}
+    >
+      {/* Masthead */}
+      <div style={{ flexShrink: 0, background: COLORS.ink }}>
+        <div className="flex items-center justify-between px-4 pt-5 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                background: COLORS.cinnabar,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "'Noto Serif JP', serif",
+                fontWeight: 700,
+                color: COLORS.paper,
+                fontSize: 13,
+              }}
+            >
+              中
+            </div>
+            <div
+              style={{
+                fontFamily: "'Noto Serif JP', serif",
+                fontWeight: 900,
+                fontSize: 18,
+                color: COLORS.paper,
+                letterSpacing: 0.5,
+              }}
+            >
+              中国ニュース
+            </div>
+          </div>
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: "50%",
+              background: COLORS.inkSoft,
+              border: `1px solid ${COLORS.inkLine}`,
+            }}
+            aria-label="更新"
+          >
+            <RefreshCw size={15} color={COLORS.paper} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
+        <div style={{ height: 2, background: COLORS.cinnabar }} />
+        <div style={{ height: 1, background: COLORS.inkLine, marginTop: 2 }} />
+        <div className="px-4 py-2 flex items-center justify-between">
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10,
+              letterSpacing: 0.8,
+              color: COLORS.textFaint,
+              textTransform: "uppercase",
+            }}
+          >
+            Global coverage of China
+          </span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: COLORS.textFaint }}>
+            {formattedTime ? `最終更新 ${formattedTime}` : loading ? "取得中…" : "未更新"}
+          </span>
+        </div>
+      </div>
+
+      {/* Category filter */}
+      <div
+        className="flex gap-2 px-4 py-3 overflow-x-auto"
+        style={{ borderBottom: `1px solid ${COLORS.inkLine}`, flexShrink: 0 }}
+      >
+        {[{ key: "all", label: "すべて", color: COLORS.paper }, ...CATEGORIES].map((c) => {
+          const active = activeFilter === c.key;
+          return (
+            <button
+              key={c.key}
+              onClick={() => setActiveFilter(c.key)}
+              style={{
+                fontFamily: "'Noto Sans JP', sans-serif",
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "6px 12px",
+                borderRadius: 999,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+                border: `1px solid ${active ? c.color : COLORS.inkLine}`,
+                background: active ? c.color : "transparent",
+                color: active ? COLORS.ink : COLORS.textMuted,
+              }}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Error banner */}
+      {errorCats.length > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2" style={{ background: COLORS.cinnabarDim, flexShrink: 0 }}>
+          <AlertCircle size={13} color={COLORS.paper} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 11, color: COLORS.paper, fontFamily: "'Noto Sans JP', sans-serif" }}>
+            {errorCats.join("・")}の取得に失敗しました。更新をお試しください。
+          </span>
+        </div>
+      )}
+
+      {/* Region rows, stacked vertically */}
+      <div className="flex-1 overflow-y-auto relative">
+        {REGIONS.map((r) => {
+          const rowArticles = filtered.filter((a) => a.region === r.key);
+          return (
+            <div key={r.key}>
+              <div
+                className="px-4 py-2 flex items-center gap-2"
+                style={{
+                  background: COLORS.inkSoft,
+                  borderBottom: `1px solid ${COLORS.inkLine}`,
+                  borderTop: `1px solid ${COLORS.inkLine}`,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'Noto Serif JP', serif",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    color: COLORS.paper,
+                    letterSpacing: 1,
+                  }}
+                >
+                  {r.label}
+                </span>
+                <span
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    color: COLORS.textFaint,
+                  }}
+                >
+                  {rowArticles.length}件
+                </span>
+              </div>
+
+              {loading && articles.length === 0 &&
+                Array.from({ length: 3 }).map((_, idx) => <SkeletonCard key={idx} />)}
+
+              {!loading && initialLoadDone && rowArticles.length === 0 && articles.length > 0 && (
+                <div className="px-4 py-5 text-center">
+                  <span style={{ fontFamily: "'Noto Sans JP', sans-serif", fontSize: 11, color: COLORS.textFaint }}>
+                    該当ニュースなし
+                  </span>
+                </div>
+              )}
+
+              {rowArticles.map((a) => (
+                <ArticleCard key={a.id} article={a} onOpen={setSelected} />
+              ))}
+            </div>
+          );
+        })}
+
+        {!loading && initialLoadDone && articles.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center gap-3">
+            <div style={{ fontFamily: "'Noto Serif JP', serif", fontSize: 15, color: COLORS.paper, fontWeight: 700 }}>
+              まだニュースがありません
+            </div>
+            <p style={{ fontFamily: "'Noto Sans JP', sans-serif", fontSize: 12.5, color: COLORS.textMuted, lineHeight: 1.7 }}>
+              右上の更新ボタンをタップすると、世界各国の報道から中国・華東地区の最新ニュースを取得して日本語で表示します。
+            </p>
+          </div>
+        )}
+
+        {selected && <DetailView article={selected} onBack={() => setSelected(null)} />}
+      </div>
+    </div>
+  );
+}
